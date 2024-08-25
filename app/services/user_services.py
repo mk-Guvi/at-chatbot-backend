@@ -34,3 +34,13 @@ class UserService:
             return ApiResponse(type="success", data={"users": user_responses})
         except Exception as e:
             return ApiResponse(type="error", message=str(e))
+
+    async def get_chatbot_user(self) -> ApiResponse:
+        try:
+            chatbot_user = await self.collection.find_one({"is_bot": True})
+            if chatbot_user:
+                return ApiResponse(type="success", data=UserResponse.from_db_model(UserInDB(**chatbot_user)).model_dump())
+            else:
+                return ApiResponse(type="error", message="Chatbot user not found")
+        except Exception as e:
+            return ApiResponse(type="error", message=str(e))

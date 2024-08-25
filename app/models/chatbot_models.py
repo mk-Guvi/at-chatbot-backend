@@ -17,10 +17,11 @@ class MessageInfo(BaseModel):
     value: str
     action_id: Optional[str] = None
 
+
 class ChatI(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, json_encoders={ObjectId: str, UUID: str})
 
-    from_user: Union[UUID, ObjectId] = Field(..., alias="from_user")
+    from_user: Union[UUID, str] = Field(..., alias="from_user")
     chat_id: str = Field(default_factory=lambda: str(uuid4()))
     context: str = "ONBOARDING"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

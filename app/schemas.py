@@ -7,3 +7,4 @@ class ApiResponse(BaseModel, Generic[T]):
     type: str
     message: Optional[str] = None
     data: Optional[T] = None
+    has_next:Optional[bool]=None
