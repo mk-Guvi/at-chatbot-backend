@@ -2,10 +2,12 @@ from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.routes.index import router as routes
-from app.middlewares.user_middleware import  UserMiddleware
+from app.middlewares.user_middleware import UserMiddleware
 import os
 from dotenv import load_dotenv
 from typing import AsyncIterator
+from bson.codec_options import CodecOptions
+from bson.binary import UuidRepresentation
 
 load_dotenv()
 
@@ -19,10 +21,13 @@ async def get_database_client() -> AsyncIOMotorClient:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Startup event
     app.mongodb_client = await get_database_client()
+    app.mongodb = app.mongodb_client.get_database(
+        "artisan",
+        codec_options=CodecOptions(uuid_representation=UuidRepresentation.STANDARD)
+    )
     yield  # Application is now running
     # Shutdown event
     app.mongodb_client.close()
-
 
 app = FastAPI(lifespan=lifespan)
 
@@ -45,4 +50,3 @@ def read_root():
     return {'Ping': 'Pong'}
 
 app.include_router(routes, prefix="/api/v1")
-

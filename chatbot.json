@@ -1,0 +1,37 @@
+{
+  "ONBOARDING": {
+    "STEP_1": {
+      "message": "Welcome to the world",
+      "actions": [
+        {
+          "type": "BUTTON",
+          "value": "Generate a report",
+          "action_id": "action_step_1_1"
+        },
+        {
+          "type": "BUTTON",
+          "value": "Assign a agent",
+          "action_id": "action_step_1_2"
+        }
+      ]
+    },
+    "STEP_2": {
+      "message": "Anything Else needed",
+      "actions": [
+        {
+          "type": "BUTTON",
+          "value": "Yes",
+          "action_id": "action_step_2_1"
+        },
+        {
+          "type": "BUTTON",
+          "value": "No",
+          "action_id": "action_step_2_2"
+        }
+      ]
+    },"STEP_3": {
+      "message": "Thank You.",
+      "actions":[]
+    }
+  }
+}

@@ -1,8 +1,6 @@
-from pydantic import BaseModel, Field, ConfigDict
-from datetime import datetime
-from uuid import uuid4, UUID
-from bson import Binary
-from typing import Any
+from pydantic import BaseModel, Field
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
 
 class UserBase(BaseModel):
     name: str
@@ -13,29 +11,19 @@ class UserCreate(UserBase):
     pass
 
 class UserInDB(UserBase):
-    user_id: Binary = Field(default_factory=lambda: Binary.from_uuid(uuid4()))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={Binary: lambda v: str(UUID(bytes=v))}
-    )
+    user_id: UUID = Field(default_factory=uuid4)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserResponse(UserBase):
     user_id: UUID
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(
-        from_attributes=True
-    )
-
     @classmethod
     def from_db_model(cls, db_model: UserInDB) -> 'UserResponse':
         return cls(
-            user_id=UUID(bytes=db_model.user_id),
+            user_id=db_model.user_id,
             name=db_model.name,
             profile_image=db_model.profile_image,
             is_bot=db_model.is_bot,

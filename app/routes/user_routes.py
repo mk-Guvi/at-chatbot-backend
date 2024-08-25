@@ -1,23 +1,26 @@
-from fastapi import APIRouter, Depends, Body, HTTPException
-from app.controllers.user_controllers import create_user, get_user_service, get_all_users, get_user
+from fastapi import APIRouter, Depends, Request
 from app.services.user_services import UserService
-from app.models.user_models import UserResponse, UserCreate
-from typing import Dict, Any, List
+from app.models.user_models import UserCreate
+from app.schemas import ApiResponse
 from uuid import UUID
+from typing import Dict, Any, List
 
 router = APIRouter()
 
-@router.post("/", response_model=Dict[str, Any])
+async def get_user_service(request: Request) -> UserService:
+    return UserService(request.app.mongodb)
+
+@router.post("/", response_model=ApiResponse[Dict[str, Any]])
 async def create_new_user(user: UserCreate, user_service: UserService = Depends(get_user_service)):
-    result = await create_user(user, user_service)
-    return {"type": "success", "data": result}
+    return await user_service.create_user(user)
 
-@router.get("/", response_model=Dict[str, Any])
+@router.get("/", response_model=ApiResponse[Dict[str, List[Dict[str, Any]]]])
 async def list_all_users(user_service: UserService = Depends(get_user_service)):
-    result = await get_all_users(user_service)
-    return {"type": "success", "data": result}
+    result = await user_service.get_all_users()
+    if result.type == "success" and not result.data["users"]:
+        return ApiResponse(type="success", message="No users found", data={"users": []})
+    return result
 
-@router.get("/{user_id}", response_model=Dict[str, Any])
+@router.get("/{user_id}", response_model=ApiResponse[Dict[str, Any]])
 async def retrieve_user(user_id: UUID, user_service: UserService = Depends(get_user_service)):
-    result = await get_user(user_id, user_service)
-    return {"type": "success", "data": result}
+    return await user_service.get_user(user_id)
