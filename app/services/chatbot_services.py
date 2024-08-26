@@ -116,6 +116,155 @@ class ChatbotService:
             chats.append(PopulatedChatI(**chat))
         return chats
 
+    async def delete_chat_message(self, chat_id: str, message_id: str, context: str, user_id: str) -> ApiResponse:
+        try:
+            # 1. Validate context
+            allowed_contexts = ["ONBOARDING"]  # Add more contexts as needed
+            if context not in allowed_contexts:
+                return ApiResponse(type="error", message="Invalid Context")
+
+            # 2. Check if chat has ended
+            chat_history = await self.chatbot_messages_history.find_one({"chat_id": chat_id})
+            if not chat_history:
+                return ApiResponse(type="error", message="Chat not found")
+
+            current_step = chat_history.get(context)
+            context_data = self.chatbot_data.get(context, {})
+            last_step = list(context_data.keys())[-1]
+
+            if current_step == last_step:
+                return ApiResponse(type="error", message="Cannot delete message after chat has ended")
+
+            # 3. Get the message to be deleted
+            message_to_delete = await self.chatbot_messages.find_one({"chat_id": chat_id, "message.id": UUID(message_id)})
+            if not message_to_delete:
+                return ApiResponse(type="error", message="Message not found")
+
+            # 4. Check if the message is from the bot
+            if message_to_delete['from_user'] != user_id:
+                return ApiResponse(type="error", message="Cannot delete bot message")
+
+            # 5. Delete the message and all subsequent messages
+            delete_result = await self.chatbot_messages.delete_many({
+                "chat_id": chat_id,
+                "created_at": {"$gte": message_to_delete['created_at']}
+            })
+
+            # 6. Update the context step
+            previous_bot_message = await self.chatbot_messages.find_one({
+                "chat_id": chat_id,
+                "from_user": {"$ne": user_id},
+                "created_at": {"$lt": message_to_delete['created_at']}
+            }, sort=[("created_at", -1)])
+
+            if previous_bot_message:
+                previous_step = self.get_step_from_message(previous_bot_message, context)
+                await self.update_chat_history(chat_id, context, previous_step)
+
+            return ApiResponse(type="success", message="Message successfully deleted",data=delete_result)
+
+        except Exception as e:
+            return ApiResponse(type="error", message=str(e))
+        
+    async def update_chat_message(self, chat_id: str, message_id: str, context: str, new_message: MessageInfo, user_id: str) -> ApiResponse:
+        try:
+            # 1. Validate context
+            allowed_contexts = ["ONBOARDING"]  # Add more contexts as needed
+            if context not in allowed_contexts:
+                return ApiResponse(type="error", message="Invalid Context")
+
+            # 2. Check if chat has ended
+            chat_history = await self.chatbot_messages_history.find_one({"chat_id": chat_id})
+            if not chat_history:
+                return ApiResponse(type="error", message="Chat not found")
+
+            current_step = chat_history.get(context)
+            context_data = self.chatbot_data.get(context, {})
+            last_step = list(context_data.keys())[-1]
+
+            if current_step == last_step:
+                return ApiResponse(type="error", message="Cannot update message after chat has ended")
+
+            # 3. Get the message to be updated
+            message_to_update = await self.chatbot_messages.find_one({"chat_id": chat_id, "message.id": message_id})
+            if not message_to_update:
+                return ApiResponse(type="error", message="Message not found")
+
+            # 4. Check if the message is from the user
+            if message_to_update['from_user'] != user_id:
+                return ApiResponse(type="error", message="Cannot update bot message")
+
+            # 5. Update the message
+            update_result = await self.chatbot_messages.update_one(
+                {"chat_id": chat_id, "message.id": message_id},
+                {"$set": {
+                    "message": new_message.model_dump(),
+                    "updated_at": datetime.now(timezone.utc)
+                }}
+            )
+
+            if update_result.modified_count == 0:
+                return ApiResponse(type="error", message="Failed to update message")
+
+            # 6. Update the context step if necessary
+            new_step = self.get_step_from_user_message(new_message, context)
+            if new_step:
+                await self.update_chat_history(chat_id, context, new_step)
+
+            return ApiResponse(type="success", message="Message successfully updated")
+
+        except Exception as e:
+            return ApiResponse(type="error", message=str(e))
+
+    def get_step_from_user_message(self, message: MessageInfo, context: str) -> str:
+        for step, step_data in self.chatbot_data.get(context, {}).items():
+            for action in step_data.get('actions', []):
+                if action.get('action_id') == message.action_id:
+                    return step
+        return None  # Return None if no matching step is found
+    
+    def get_step_from_message(self, message: Dict[str, Any], context: str) -> str:
+        message_value = message['message']['value']
+        for step, step_data in self.chatbot_data.get(context, {}).items():
+            if step_data.get('message') == message_value:
+                return step
+        return "STEP_1"  # Default to STEP_1 if not found
+    
+    async def get_all_chat_messages(self, chat_id: str) -> ApiResponse:
+        try:
+            # Retrieve all messages for the given chat_id
+            messages = await self.chatbot_messages.find({"chat_id": chat_id}).sort("created_at", 1).to_list(length=None)
+            
+            if not messages:
+                return ApiResponse(type="error", message="Chat not found or no messages available")
+
+            # Convert messages to ChatI objects
+            chat_messages = [ChatI(**message) for message in messages]
+
+            # Determine if there are more steps available
+            chat_history = await self.chatbot_messages_history.find_one({"chat_id": chat_id})
+            has_next = False
+
+            if chat_history:
+                for context, current_step in chat_history.items():
+                    if context != '_id' and context != 'chat_id':
+                        context_data = self.chatbot_data.get(context, {})
+                        steps = list(context_data.keys())
+                        if current_step != steps[-1]:
+                            has_next = True
+                            break
+
+            return ApiResponse(
+                type="success",
+                data={
+                    "chats": [chat.model_dump() for chat in chat_messages],
+                    "has_next": has_next
+                }
+            )
+
+        except Exception as e:
+            return ApiResponse(type="error", message=str(e))
+    
     async def create_chat_message(self, chat_id: str, content: str, chatbot_user_id: str):
         message = ChatI(
             from_user=chatbot_user_id,
@@ -220,7 +369,6 @@ class ChatbotService:
     }
 
     async def handle_action_step_1_1(self, chat_id: str, context: str, chatbot_user_id: str):
-        step_data = self.get_next_step(context,"STEP_1")
         await self.create_chat_message(chat_id, "We have mailed the report to your mail", chatbot_user_id)
         has_next, result = self.get_next_step("STEP_1", context)
         if has_next:
@@ -240,26 +388,22 @@ class ChatbotService:
         await self.update_chat_history(chat_id, context, "STEP_2")
 
     async def handle_action_step_1_2(self, chat_id: str, context: str, chatbot_user_id: str):
-        await self.create_chat_message(chat_id, "We have assigned an agent and you will receive the mail", chatbot_user_id)
-        has_next, step_data = self.get_next_step(context,"STEP_1")
-        
+        await self.create_chat_message(chat_id, "We have assigned an agent and you will receive the mail", chatbot_user_id)        
+        has_next, result = self.get_next_step("STEP_1", context)
         if has_next:
-        # Create the message for the next step
-            next_message = ChatI(
+             step_data = result.get("chat")
+             if step_data.message.value:
+                next_message = ChatI(
                 from_user=chatbot_user_id,
                 chat_id=chat_id,
-                message=MessageInfo(
-                    id=str(uuid4()),
-                    type="string",
-                    value=step_data.get("message", ""),
-                    action_id=None
-                ),
-                actions=[ChatActionI(**action) for action in step_data.get("actions", [])],
+                message=step_data.message,
+                actions=step_data.actions,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)
-            )
+                )
+                await self.chatbot_messages.insert_one(next_message.model_dump(by_alias=True))
         
-            await self.chatbot_messages.insert_one(next_message.model_dump(by_alias=True))
+        
         await self.update_chat_history(chat_id, context, "STEP_2")
 
     async def handle_action_step_2_1(self, chat_id: str, context: str, chatbot_user_id: str):

@@ -37,6 +37,32 @@ async def create_chat(
         )
     except Exception as e:
         return ApiResponse(type="error", message=str(e))
+    
+async def get_all_chat_messages(
+    request: Request,
+    chat_id: str,
+    chatbot_service: ChatbotService = Depends(get_chatbot_service),
+    user_service: UserService = Depends(get_user_service)
+) -> ApiResponse:
+    try:
+        user_id = request.state.user_id
+        
+        if not user_id:
+            return ApiResponse(type="error", message="User not authenticated")
+        
+        user_result = await user_service.get_user(uuid.UUID(user_id))
+        
+        if user_result.type == "error":
+            return user_result
+        
+        if not user_result.data:
+            return ApiResponse(type="error", message="User not found")
+        
+        result = await chatbot_service.get_all_chat_messages(chat_id)
+        
+        return result
+    except Exception as e:
+        return ApiResponse(type="error", message=str(e))
 
 
 async def get_chatbot_response(
@@ -99,3 +125,30 @@ async def add_chat_message(
     except Exception as e:
         return ApiResponse(type="error", message=str(e))
 
+async def delete_chat_message(
+    request: Request,
+    chat_id: str,
+    message_id: str,
+    context: str,
+    chatbot_service: ChatbotService = Depends(get_chatbot_service),
+    user_service: UserService = Depends(get_user_service)
+) -> ApiResponse:
+    try:
+        user_id = request.state.user_id
+        
+        if not user_id:
+            return ApiResponse(type="error", message="User not authenticated")
+        
+        user_result = await user_service.get_user(uuid.UUID(user_id))
+        
+        if user_result.type == "error":
+            return user_result
+        
+        if not user_result.data:
+            return ApiResponse(type="error", message="User not found")
+        
+        result = await chatbot_service.delete_chat_message(chat_id, message_id, context, user_id)
+        
+        return result
+    except Exception as e:
+        return ApiResponse(type="error", message=str(e))
