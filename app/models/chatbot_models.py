@@ -1,27 +1,22 @@
-# app/models/chatbot_models.py
-
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional, Union
+from typing import List, Optional
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
-from bson import ObjectId
+
+class MessageInfo(BaseModel):
+    type: str = Field(..., pattern="^(string|HTML)$")
+    value: str
+    action_id: Optional[str] = None
+    id: UUID = Field(default_factory=uuid4)
 
 class ChatActionI(BaseModel):
     type: str = Field(..., pattern="^(BUTTON|FILE)$")
     value: str
     action_id: str
 
-class MessageInfo(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid4()))
-    type: str = "string"
-    value: str
-    action_id: Optional[str] = None
-
-
 class ChatI(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True, json_encoders={ObjectId: str, UUID: str})
-
-    from_user: Union[UUID, str] = Field(..., alias="from_user")
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    from_user: str
     chat_id: str = Field(default_factory=lambda: str(uuid4()))
     context: str = "ONBOARDING"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

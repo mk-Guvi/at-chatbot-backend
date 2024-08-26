@@ -24,11 +24,11 @@ async def get_all_users(user_service: UserService = Depends(get_user_service)) -
     except Exception as e:
         return ApiResponse(type="error", message=str(e))
 
-async def get_user(user_id: UUID, user_service: UserService = Depends(get_user_service)) -> ApiResponse:
+async def get_user(user_id: str, user_service: UserService = Depends(get_user_service)) -> ApiResponse:
     try:
-        result = await user_service.get_user(user_id)
+        result = await user_service.get_user(UUID(user_id)  )
         if result:
-            return ApiResponse(type="success", data=result.dict())
+            return ApiResponse(type="success", data=result.model_dump())
         return ApiResponse(type="error", message="User not found")
     except Exception as e:
         return ApiResponse(type="error", message=str(e))
