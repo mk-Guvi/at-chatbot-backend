@@ -17,6 +17,7 @@ class ChatActionI(BaseModel):
 class ChatI(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     from_user: str
+    user_id:str#To Group the chats by user
     chat_id: str = Field(default_factory=lambda: str(uuid4()))
     context: str = "ONBOARDING"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

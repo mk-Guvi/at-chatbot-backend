@@ -23,7 +23,7 @@ class ChatbotService:
     def get_step_data(self, context: str, step: str) -> Dict[str, Any]:
         return self.chatbot_data.get(context, {}).get(step, {})
 
-    async def get_chatbot_response(self, chat_id: str, context: str, chatbot_user_id: str) -> ApiResponse:
+    async def get_chatbot_response(self, chat_id: str, context: str, chatbot_user_id: str,user_id:str) -> ApiResponse:
         last_message = await self.chatbot_messages.find_one(
             {"chat_id": chat_id},
             sort=[("updated_at", -1)]
@@ -46,7 +46,7 @@ class ChatbotService:
             action_id = last_message['message'].get('action_id')
             
             if action_id:
-                await self.responseByActionId[action_id](self, chat_id, context, chatbot_user_id)
+                await self.responseByActionId[action_id](self, chat_id, context, chatbot_user_id,user_id)
                 if action_id in ["action_step_1_1", "action_step_1_2"]:
                     latest_messages = await self.get_latest_chat_message(chat_id, count=2)
                 else:
@@ -78,8 +78,34 @@ class ChatbotService:
                 context_data = self.chatbot_data.get(context, {})
                 has_next = current_step != list(context_data.keys())[-1]
                 return ApiResponse(type="success", data={"chat": chat.model_dump(), "has_next": has_next})
+            
+    async def get_user_chats(self, user_id: str) -> ApiResponse:
+        try:
+            # Get all chats for the user
+            chats = await self.chatbot_messages.aggregate([
+                {"$match": {"user_id": user_id}},
+                {"$sort": {"updated_at": -1}},
+                {"$group": {
+                    "_id": "$chat_id",
+                    "last_message": {"$first": "$$ROOT"}
+                }},
+                {"$replaceRoot": {"newRoot": "$last_message"}}
+            ]).to_list(None)
 
-    async def create_chat(self, user_id: str) -> ChatI:
+            if not chats:
+                return ApiResponse(type="success", data=[])
+
+            # Populate the from_user field
+            for chat in chats:
+                user = await self.users.find_one({"user_id": UUID(chat['from_user'])})
+                if user:
+                    chat['from_user'] = UserInDB(**user).model_dump()
+
+            return ApiResponse(type="success", data=[PopulatedChatI(**chat).model_dump() for chat in chats])
+        except Exception as e:
+            return ApiResponse(type="error", message=str(e))
+        
+    async def create_chat(self, from_user_id:str,user_id: str) -> ChatI:
         step_data = self.get_step_data("ONBOARDING", "STEP_1")
         
         message = MessageInfo(
@@ -92,7 +118,8 @@ class ChatbotService:
         actions = [ChatActionI(**action) for action in step_data.get("actions", [])]
         
         chat = ChatI(
-            from_user=str(user_id),
+            from_user=str(from_user_id),
+            user_id=str(user_id), 
             message=message,
             actions=actions
         )
@@ -290,6 +317,7 @@ class ChatbotService:
             new_message = ChatI(
                 from_user=str(user_id),
                 chat_id=chat_id,
+                user_id=str(user_id),
                 message=MessageInfo(
                     id=str(uuid4()),
                     type=message.type,
@@ -362,13 +390,13 @@ class ChatbotService:
             return ApiResponse(type="error", message="No messages found")
 
     responseByActionId = {
-        "action_step_1_1": lambda self, chat_id, context, chatbot_user_id: self.handle_action_step_1_1(chat_id, context, chatbot_user_id),
-        "action_step_1_2": lambda self, chat_id, context, chatbot_user_id: self.handle_action_step_1_2(chat_id, context, chatbot_user_id),
-        "action_step_2_1": lambda self, chat_id, context, chatbot_user_id: self.handle_action_step_2_1(chat_id, context, chatbot_user_id),
-        "action_step_2_2": lambda self, chat_id, context, chatbot_user_id: self.handle_action_step_2_2(chat_id, context, chatbot_user_id),
+        "action_step_1_1": lambda self, chat_id, context,chatbot_user_id,user_id: self.handle_action_step_1_1(chat_id, context, chatbot_user_id,user_id),
+        "action_step_1_2": lambda self, chat_id, context, chatbot_user_id,user_id: self.handle_action_step_1_2(chat_id, context, chatbot_user_id,user_id),
+        "action_step_2_1": lambda self, chat_id, context, chatbot_user_id,user_id: self.handle_action_step_2_1(chat_id, context, chatbot_user_id,user_id),
+        "action_step_2_2": lambda self, chat_id, context, chatbot_user_id,user_id: self.handle_action_step_2_2(chat_id, context, chatbot_user_id,user_id),
     }
 
-    async def handle_action_step_1_1(self, chat_id: str, context: str, chatbot_user_id: str):
+    async def handle_action_step_1_1(self, chat_id: str, context: str, chatbot_user_id: str,user_id:str):
         await self.create_chat_message(chat_id, "We have mailed the report to your mail", chatbot_user_id)
         has_next, result = self.get_next_step("STEP_1", context)
         if has_next:
@@ -377,6 +405,7 @@ class ChatbotService:
                 next_message = ChatI(
                 from_user=chatbot_user_id,
                 chat_id=chat_id,
+                user_id=user_id,
                 message=step_data.message,
                 actions=step_data.actions,
                 created_at=datetime.now(timezone.utc),
@@ -387,7 +416,7 @@ class ChatbotService:
         
         await self.update_chat_history(chat_id, context, "STEP_2")
 
-    async def handle_action_step_1_2(self, chat_id: str, context: str, chatbot_user_id: str):
+    async def handle_action_step_1_2(self, chat_id: str, context: str, chatbot_user_id: str,user_id:str):
         await self.create_chat_message(chat_id, "We have assigned an agent and you will receive the mail", chatbot_user_id)        
         has_next, result = self.get_next_step("STEP_1", context)
         if has_next:
@@ -396,6 +425,7 @@ class ChatbotService:
                 next_message = ChatI(
                 from_user=chatbot_user_id,
                 chat_id=chat_id,
+                user_id=user_id,
                 message=step_data.message,
                 actions=step_data.actions,
                 created_at=datetime.now(timezone.utc),
@@ -406,11 +436,12 @@ class ChatbotService:
         
         await self.update_chat_history(chat_id, context, "STEP_2")
 
-    async def handle_action_step_2_1(self, chat_id: str, context: str, chatbot_user_id: str):
+    async def handle_action_step_2_1(self, chat_id: str, context: str, chatbot_user_id: str,user_id:str):
         step_data = self.get_step_data(context, "STEP_1")
         message = ChatI(
             from_user=chatbot_user_id,
             chat_id=chat_id,
+            user_id=user_id,
             message=MessageInfo(
                 id=str(uuid4()),
                 type="string",
@@ -424,11 +455,12 @@ class ChatbotService:
         await self.chatbot_messages.insert_one(message.model_dump(by_alias=True))
         await self.update_chat_history(chat_id, context, "STEP_1")
 
-    async def handle_action_step_2_2(self, chat_id: str, context: str, chatbot_user_id: str):
+    async def handle_action_step_2_2(self, chat_id: str, context: str, chatbot_user_id: str,user_id:str):
         step_data = self.get_step_data(context, "STEP_3")
         message = ChatI(
             from_user=chatbot_user_id,
             chat_id=chat_id,
+            user_id=user_id,
             message=MessageInfo(
                 id=str(uuid4()),
                 type="string",
