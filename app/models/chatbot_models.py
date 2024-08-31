@@ -29,8 +29,6 @@ class ChatI(BaseModel):
     def from_user_str(self) -> str:
         return str(self.from_user)
 
-class PopulatedChatI(ChatI):
-    from_user: 'UserInDB'
 
 class ChatbotMessageTracking(BaseModel):
     chat_id: str

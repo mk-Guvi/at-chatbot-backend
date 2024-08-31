@@ -21,6 +21,10 @@ async def list_all_users(user_service: UserService = Depends(get_user_service)):
         return ApiResponse(type="success", message="No users found", data={"users": []})
     return result
 
+@router.get("/chatbot", response_model=ApiResponse[Dict[str, Any]])
+async def retrieve_user(user_service: UserService = Depends(get_user_service)):
+    return await user_service.get_chatbot_user()
+
 @router.get("/{user_id}", response_model=ApiResponse[Dict[str, Any]])
 async def retrieve_user(user_id: UUID, user_service: UserService = Depends(get_user_service)):
     return await user_service.get_user(user_id)

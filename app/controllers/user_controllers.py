@@ -1,34 +1,30 @@
-from fastapi import Request, Depends, HTTPException
-from motor.motor_asyncio import AsyncIOMotorClient
-from app.services.user_services import UserService
-from app.models.user_models import UserCreate, UserResponse
+from fastapi import APIRouter, Depends, Request
+from app.controllers.user_controllers import (
+    get_user_service,
+    create_user,
+    get_all_users,
+    get_user,
+    get_chatbot_user
+)
+from app.models.user_models import UserCreate
 from app.schemas import ApiResponse
-from typing import List
 from uuid import UUID
+from typing import Dict, Any, List
 
-async def get_user_service(request: Request) -> UserService:
-    db_client: AsyncIOMotorClient = request.app.mongodb_client
-    return UserService(db_client)
+router = APIRouter()
 
-async def create_user(user: UserCreate, user_service: UserService = Depends(get_user_service)) -> ApiResponse:
-    try:
-        result = await user_service.create_user(user)
-        return ApiResponse(type="success", data=result.dict())
-    except Exception as e:
-        return ApiResponse(type="error", message=str(e))
+@router.post("/", response_model=ApiResponse[Dict[str, Any]])
+async def create_new_user(user: UserCreate, user_service=Depends(get_user_service)):
+    return await create_user(user, user_service)
 
-async def get_all_users(user_service: UserService = Depends(get_user_service)) -> ApiResponse:
-    try:
-        result = await user_service.get_all_users()
-        return ApiResponse(type="success", data={"users": [user.dict() for user in result]})
-    except Exception as e:
-        return ApiResponse(type="error", message=str(e))
+@router.get("/", response_model=ApiResponse[Dict[str, List[Dict[str, Any]]]])
+async def list_all_users(user_service=Depends(get_user_service)):
+    return await get_all_users(user_service)
 
-async def get_user(user_id: str, user_service: UserService = Depends(get_user_service)) -> ApiResponse:
-    try:
-        result = await user_service.get_user(UUID(user_id)  )
-        if result:
-            return ApiResponse(type="success", data=result.model_dump())
-        return ApiResponse(type="error", message="User not found")
-    except Exception as e:
-        return ApiResponse(type="error", message=str(e))
+@router.get("/{user_id}", response_model=ApiResponse[Dict[str, Any]])
+async def retrieve_user(user_id: UUID, user_service=Depends(get_user_service)):
+    return await get_user(str(user_id), user_service)
+
+@router.get("/chatbot", response_model=ApiResponse[Dict[str, Any]])
+async def retrieve_chatbot_user(user_service=Depends(get_user_service)):
+    return await get_chatbot_user(user_service)

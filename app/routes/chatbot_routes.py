@@ -3,8 +3,8 @@ from app.controllers.chatbot_controllers import create_chat, get_chatbot_respons
 from app.services.chatbot_services import ChatbotService
 from app.services.user_services import UserService
 from app.schemas import ApiResponse
-from app.models.chatbot_models import PopulatedChatI, ChatI, MessageInfo
-from typing import List,Dict, Any
+from app.models.chatbot_models import  ChatI, MessageInfo
+from typing import List,Dict, Any,Optional
 
 from pydantic import BaseModel
 
@@ -18,6 +18,8 @@ class UpdateChatMessageRequest(BaseModel):
     message: MessageInfo
 class AddChatMessageRequest(BaseModel):
     message: MessageInfo
+    context: str
+    from_message_id: Optional[str] = None
 
 class DeleteChatMessageRequest(BaseModel):
     message_id: str
@@ -31,7 +33,7 @@ async def create_new_chat(
 ):
     return await create_chat(request, chatbot_service, user_service)
 
-@router.post("/get_response/{chat_id}", response_model=ApiResponse[Dict[str, Any]])
+@router.post("/{chat_id}/get_response", response_model=ApiResponse[Dict[str, Any]])
 async def get_response(
     request: Request,
     chat_id: str,
@@ -41,7 +43,10 @@ async def get_response(
 ):
     return await get_chatbot_response(request, chat_id, chatbot_request.context, chatbot_service, user_service)
 
-@router.post("/add_chat/{chat_id}", response_model=ApiResponse[ChatI])
+
+
+
+@router.post("/{chat_id}/add_chat", response_model=ApiResponse[ChatI])
 async def add_chat_message_route(
     request: Request,
     chat_id: str,
@@ -51,7 +56,8 @@ async def add_chat_message_route(
 ):
     return await add_chat_message(request, chat_id, message_request.message, chatbot_service, user_service)
 
-@router.delete("/delete_chat_message/{chat_id}", response_model=ApiResponse)
+
+@router.delete("/{chat_id}/delete_chat_message", response_model=ApiResponse)
 async def delete_chat_message_route(
     request: Request,
     chat_id: str,
@@ -61,7 +67,7 @@ async def delete_chat_message_route(
 ):
     return await delete_chat_message(request, chat_id, delete_request.message_id, delete_request.context, chatbot_service, user_service)
 
-@router.get("/chatbot/{chat_id}", response_model=ApiResponse[Dict[str, Any]])
+@router.post("/{chat_id}", response_model=ApiResponse[Dict[str, Any]])
 async def get_all_chat_messages_route(
     request: Request,
     chat_id: str,
@@ -72,7 +78,7 @@ async def get_all_chat_messages_route(
 
 
 
-@router.put("/update_chat_message/{chat_id}", response_model=ApiResponse)
+@router.put("/{chat_id}/update_chat_message", response_model=ApiResponse)
 async def update_chat_message_route(
     request: Request,
     chat_id: str,

@@ -1,22 +1,23 @@
 {
   "ONBOARDING": {
     "STEP_1": {
-      "message": "Welcome to the world",
+      "message": "Hi there! I'm Ava, your virtual assistant from Artisan. How can I help you today?",
       "actions": [
         {
           "type": "BUTTON",
-          "value": "Generate a report",
+          "value": "Generate report",
           "action_id": "action_step_1_1"
         },
         {
           "type": "BUTTON",
-          "value": "Assign a agent",
+          "value": "Assign agent",
           "action_id": "action_step_1_2"
         }
       ]
-    },
+    }
+    ,
     "STEP_2": {
-      "message": "Anything Else needed",
+      "message": "Anything else needed.",
       "actions": [
         {
           "type": "BUTTON",

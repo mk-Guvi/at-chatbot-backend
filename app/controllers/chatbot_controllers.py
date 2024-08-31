@@ -3,7 +3,7 @@
 from fastapi import Request, Depends
 from app.services.chatbot_services import ChatbotService
 from app.services.user_services import UserService
-from app.models.chatbot_models import PopulatedChatI, ChatI, MessageInfo
+from app.models.chatbot_models import  MessageInfo
 from app.schemas import ApiResponse
 import uuid 
 async def get_chatbot_service(request: Request) -> ChatbotService:
@@ -46,6 +46,8 @@ async def get_all_chat_messages(
     user_service: UserService = Depends(get_user_service)
 ) -> ApiResponse:
     try:
+        body= await request.json()
+
         user_id = request.state.user_id
         
         if not user_id:
@@ -59,7 +61,7 @@ async def get_all_chat_messages(
         if not user_result.data:
             return ApiResponse(type="error", message="User not found")
         
-        result = await chatbot_service.get_all_chat_messages(chat_id)
+        result = await chatbot_service.get_all_chat_messages(chat_id,context=body.get("context"))
         
         return result
     except Exception as e:
@@ -99,15 +101,9 @@ async def add_chat_message(
     user_service: UserService = Depends(get_user_service)
 ) -> ApiResponse:
     try:
-        # Define the allowed context array
-        allowed_contexts = ["ONBOARDING"]
-
-        # Assuming the user_id is passed through middleware and stored in request.state
         body = await request.json()
         context = body.get("context")
-        if context not in allowed_contexts:
-            return ApiResponse(type="error", message="Invalid context")
-
+        from_message_id = body.get("from_message_id")
         user_id = request.state.user_id
         
         if not user_id:
@@ -121,7 +117,7 @@ async def add_chat_message(
         if not user_result.data:
             return ApiResponse(type="error", message="User not found")
         
-        result = await chatbot_service.add_chat_message(chat_id, message, str(user_id), context)
+        result = await chatbot_service.add_chat_message(chat_id, message, str(user_id), context, from_message_id)
         
         return result
     except Exception as e:
@@ -149,9 +145,9 @@ async def delete_chat_message(
         if not user_result.data:
             return ApiResponse(type="error", message="User not found")
         
-        result = await chatbot_service.delete_chat_message(chat_id, message_id, context, user_id)
+        return await chatbot_service.delete_chat_message(chat_id, message_id, context, user_id)
         
-        return result
+        
     except Exception as e:
         return ApiResponse(type="error", message=str(e))
     
