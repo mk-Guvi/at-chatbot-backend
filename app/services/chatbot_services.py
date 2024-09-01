@@ -441,7 +441,7 @@ class ChatbotService:
             message=MessageInfo(
                 id=str(uuid4()),
                 type="string",
-                value="We have mailed the report to your mail",
+                value="We have mailed the report to your email address.",
                 action_id=None
             ),
             actions=[],
@@ -487,7 +487,7 @@ class ChatbotService:
             message=MessageInfo(
                 id=str(uuid4()),
                 type="string",
-                value="We have assigned an agent and you will receive the mail",
+                value="We have assigned an agent and you will receive the mail.",
                 action_id=None
             ),
             actions=[],
